@@ -8,6 +8,8 @@ Target city: Lagos, Nigeria
 Google Earth Engine Data: 
 - Choose high value bands from AOD (Main aerosol signal + quality + water‑vapour helps scaling), NDVI (Vegetation → dust suppression / seasonal burn), night-lights (Proxy for traffic & industry activity)
 - Grab weekly composites
+- Data cleaning:
+    - Missing some bands for nightlight data: filter out images or add missing bands with a masked value
 
 OpenAQ:
 - Pull PM2.5 from Delhi and Lagos with a "bounding box", aggregate to weekly averages.
