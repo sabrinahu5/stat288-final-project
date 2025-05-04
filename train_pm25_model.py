@@ -254,16 +254,40 @@ def main():
     lagos_labels = load_csv_data(lagos_csv_path)
     print(f"Loaded {len(lagos_labels)} Lagos label entries.")
     # Merge patches with labels
-    delhi_data = merge_data(delhi_patches, delhi_labels)
-    lagos_data = merge_data(lagos_patches, lagos_labels)
-    
+    delhi_patches['week'] = pd.to_datetime(delhi_patches['week_ms'], unit='ms').dt.strftime('%Y-%m-%d')
+    lagos_patches['week'] = pd.to_datetime(lagos_patches['week_ms'], unit='ms').dt.strftime('%Y-%m-%d')
+    # For patches
+    for df in [delhi_patches, lagos_patches]:
+        df['week_dt'] = pd.to_datetime(df['week_ms'], unit='ms')
+        df['iso_year'] = df['week_dt'].dt.isocalendar().year
+        df['iso_week'] = df['week_dt'].dt.isocalendar().week
+
+    # For labels
+    for df in [delhi_labels, lagos_labels]:
+        df['week_dt'] = pd.to_datetime(df['week'], errors='coerce')
+        df['iso_year'] = df['week_dt'].dt.isocalendar().year
+        df['iso_week'] = df['week_dt'].dt.isocalendar().week
+
+    # For Delhi
+    delhi_merged = pd.merge(
+        delhi_patches, delhi_labels,
+        on=['sid', 'iso_year', 'iso_week'],
+        how='inner'
+    )
+
+    # For Lagos
+    lagos_merged = pd.merge(
+        lagos_patches, lagos_labels,
+        on=['sid', 'iso_year', 'iso_week'],
+        how='inner'
+    )
+
     # Filter by years for training/validation/test
     # Delhi train: 2018-2022, validation: 2023
-    delhi_train = delhi_data[(delhi_data['year'] >= 2018) & (delhi_data['year'] <= 2022)]
-    delhi_val = delhi_data[delhi_data['year'] == 2023]
-    # Lagos train (fine-tune): all except 2023 (if any, e.g., 2018-2022 or 2024), Lagos test: 2023
-    lagos_train = lagos_data[lagos_data['year'] != 2023]  # use any data not in 2023 for training
-    lagos_test = lagos_data[lagos_data['year'] == 2023]
+    delhi_train, delhi_test = train_test_split(delhi_merged, test_size=0.2, random_state=42)
+
+    # For Lagos: 80% training, 20% test
+    lagos_train, lagos_test = train_test_split(lagos_merged, test_size=0.2, random_state=42)
     # If there's no separate Lagos train data (e.g., all data is 2023), we'll use the small dataset in calibration step.
     # Prepare numpy arrays for model input/output
     # Determine input shape from patches (assuming at least one sample exists)
@@ -274,8 +298,8 @@ def main():
     # Stack patches into numpy arrays
     X_delhi_train = np.stack(delhi_train['patch'].values)
     y_delhi_train = delhi_train['pm25_mean'].values.astype(np.float32)
-    X_delhi_val = np.stack(delhi_val['patch'].values) if len(delhi_val) > 0 else np.array([]).reshape(0, *input_shape)
-    y_delhi_val = delhi_val['pm25_mean'].values.astype(np.float32) if len(delhi_val) > 0 else np.array([], dtype=np.float32)
+    X_delhi_val = np.stack(delhi_test['patch'].values) if len(delhi_test) > 0 else np.array([]).reshape(0, *input_shape)
+    y_delhi_val = delhi_test['pm25_mean'].values.astype(np.float32) if len(delhi_test) > 0 else np.array([], dtype=np.float32)
     X_lagos_train = np.stack(lagos_train['patch'].values) if len(lagos_train) > 0 else np.array([]).reshape(0, *input_shape)
     y_lagos_train = lagos_train['pm25_mean'].values.astype(np.float32) if len(lagos_train) > 0 else np.array([], dtype=np.float32)
     X_lagos_test = np.stack(lagos_test['patch'].values) if len(lagos_test) > 0 else np.array([]).reshape(0, *input_shape)
